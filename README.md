@@ -9,6 +9,8 @@ To call the function
 
 
 
+
+
 `{`
 
   `"fileName":"Azure Synapse Analytics L300.rar"`
@@ -22,6 +24,8 @@ Local call passing fileName, source and destination containers
 `POST http://localhost:7071/api/Unrar`
 
 `Content-Type: application/json`
+
+
 
 
 
@@ -40,6 +44,8 @@ Local call passing fileName, source and destination containers and set useManage
 `POST http://localhost:7071/api/Unrar`
 
 `Content-Type: application/json`
+
+
 
 
 

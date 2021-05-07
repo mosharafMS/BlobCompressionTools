@@ -96,8 +96,6 @@ namespace BlobCompressionTools
             {
 
                 string filePath = $"https://{storageAccountName}.blob.core.windows.net/{reqBlobInfo.containerSource}/{reqBlobInfo.fileName}";
-                //var azureServiceTokenProvider = new AzureServiceTokenProvider();
-                //storageAccessToken = await azureServiceTokenProvider.GetAccessTokenAsync("https://storage.azure.com/");
                 clientSrc = new BlobClient(new Uri(filePath), new DefaultAzureCredential());
 
             }

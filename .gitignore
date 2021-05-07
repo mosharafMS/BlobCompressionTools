@@ -361,3 +361,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/BlobCompressionTools/Properties/ServiceDependencies/BlobCompressionTools - Zip Deploy
+/BlobCompressionTools/Properties/serviceDependencies.BlobCompressionTools - Zip Deploy.json
