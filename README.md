@@ -3,8 +3,8 @@ Azure function to unrar files from Azure storage.
 
 To call the function
 
-POST http://localhost:7071/api/Unrar
-Content-Type: application/json
+`POST http://localhost:7071/api/Unrar`
+`Content-Type: application/json`
 
 `{`
   `"fileName":"Azure Synapse Analytics L300.rar"`
@@ -18,8 +18,8 @@ Content-Type: application/json
 
 Local call passing fileName, source and destination containers
 
-POST http://localhost:7071/api/Unrar
-Content-Type: application/json
+`POST http://localhost:7071/api/Unrar`
+`Content-Type: application/json`
 
 `{`
   `"fileName":"Azure Synapse Analytics L300.rar",`
@@ -29,8 +29,8 @@ Content-Type: application/json
 
 Local call passing fileName, source and destination containers and set useManagedIdentity to false
 
-POST http://localhost:7071/api/Unrar
-Content-Type: application/json
+`POST http://localhost:7071/api/Unrar`
+`Content-Type: application/json`
 
 `{`
   `"fileName":"Azure Synapse Analytics L300.rar",`
