@@ -50,6 +50,7 @@ namespace BlobCompressionTools
             #region Input and validation
             //read the request body into string
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+            log.LogTrace($"Request body: {requestBody}");
             //deserialize body into Models.BlobInfo object
             var reqBlobInfo = JsonConvert.DeserializeObject<Models.BlobInfo>(requestBody);
 
@@ -66,7 +67,7 @@ namespace BlobCompressionTools
             if (String.IsNullOrEmpty(reqBlobInfo.containerTarget))
             {
                 //get the value from configurations
-                reqBlobInfo.containerSource = config["ContainerNameTarget"];
+                reqBlobInfo.containerTarget = config["ContainerNameTarget"];
             }
             if(reqBlobInfo.useManagedIdentity==false) //has to be provided if not using managed identity
             {
@@ -77,6 +78,7 @@ namespace BlobCompressionTools
             if(String.IsNullOrEmpty(reqBlobInfo.fileName) | String.IsNullOrEmpty(reqBlobInfo.containerSource) | String.IsNullOrEmpty(reqBlobInfo.containerTarget) | (String.IsNullOrEmpty(storageAccountConnectionString) & reqBlobInfo.useManagedIdentity==false))
             {
                 //return error 
+                log.LogError("Missing fileName or the source or destination container or storage Account name");
                 return new BadRequestObjectResult("MISSING_INPUT");
             }
 
@@ -86,11 +88,7 @@ namespace BlobCompressionTools
             //prepare local disk workspace
             var localFolder = Path.Combine(Path.GetTempPath().Replace("C:", "D:"), "Compression",context.InvocationId.ToString());
             DirectoryInfo dir= Directory.CreateDirectory(localFolder);
-            //empty directory
-            foreach (FileInfo file in dir.GetFiles())
-            {
-                file.Delete();
-            }
+            
 
 
             //Get the blob
@@ -153,6 +151,8 @@ namespace BlobCompressionTools
                         }
                     }
                 }
+                //empty local directory
+                dir.Delete(true);
 
             }
             else
