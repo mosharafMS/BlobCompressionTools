@@ -33,7 +33,7 @@ namespace BlobCompressionTools
             //configurations
             var config = new ConfigurationBuilder()
                     .SetBasePath(context.FunctionAppDirectory)
-                    .AddJsonFile("settings.json",optional:true, reloadOnChange:true)
+                    .AddJsonFile("settings.json", optional: true, reloadOnChange: true)
                     .AddJsonFile("local.settings.json", optional: true, reloadOnChange: true)
                     .AddEnvironmentVariables()
                     .Build();
@@ -44,6 +44,7 @@ namespace BlobCompressionTools
             string storageAccessToken = string.Empty;
             BlobClient clientSrc = null;
             BlobClient clientDest = null;
+            DirectoryInfo dir = null;
             #endregion
 
 
@@ -69,13 +70,13 @@ namespace BlobCompressionTools
                 //get the value from configurations
                 reqBlobInfo.containerTarget = config["ContainerNameTarget"];
             }
-            if(reqBlobInfo.useManagedIdentity==false) //has to be provided if not using managed identity
+            if (reqBlobInfo.useManagedIdentity == false) //has to be provided if not using managed identity
             {
                 //get the value from configurations
                 storageAccountConnectionString = config["StorageAccountConnectionString"];
             }
 
-            if(String.IsNullOrEmpty(reqBlobInfo.fileName) | String.IsNullOrEmpty(reqBlobInfo.containerSource) | String.IsNullOrEmpty(reqBlobInfo.containerTarget) | (String.IsNullOrEmpty(storageAccountConnectionString) & reqBlobInfo.useManagedIdentity==false))
+            if (String.IsNullOrEmpty(reqBlobInfo.fileName) | String.IsNullOrEmpty(reqBlobInfo.containerSource) | String.IsNullOrEmpty(reqBlobInfo.containerTarget) | (String.IsNullOrEmpty(storageAccountConnectionString) & reqBlobInfo.useManagedIdentity == false))
             {
                 //return error 
                 log.LogError("Missing fileName or the source or destination container or storage Account name");
@@ -84,85 +85,163 @@ namespace BlobCompressionTools
 
             #endregion
 
-
-            //prepare local disk workspace
-            var localFolder = Path.Combine(Path.GetTempPath().Replace("C:", "D:"), "Compression",context.InvocationId.ToString());
-            DirectoryInfo dir= Directory.CreateDirectory(localFolder);
-            
-
-
-            //Get the blob
-            if(reqBlobInfo.useManagedIdentity)
+            try
             {
-
-                string filePath = $"https://{storageAccountName}.blob.core.windows.net/{reqBlobInfo.containerSource}/{reqBlobInfo.fileName}";
-                clientSrc = new BlobClient(new Uri(filePath), new DefaultAzureCredential());
-
-            }
-            else
-            {
-                //using keys
-                clientSrc = new BlobClient(storageAccountConnectionString, reqBlobInfo.containerSource, reqBlobInfo.fileName);
-            }
-           
-            
-            
-            if (await clientSrc.ExistsAsync())
-            {
-                string localFilePath = $@"{localFolder}{clientSrc.Name}";
-                var response = await clientSrc.DownloadToAsync(localFilePath);
-                log.LogTrace($"Downloaded blob with status code {response.Status.ToString()}");
-
-                //start unrar
-                var rarReaderOptions = new ReaderOptions()
+                if (reqBlobInfo.useManagedIdentity)
                 {
-                    ArchiveEncoding = new ArchiveEncoding(Encoding.UTF8, Encoding.UTF8),
-                    LookForHeader = true
-                };
+                    log.LogInformation("using managed identity");
 
-                using var reader = RarArchive.Open(localFilePath, rarReaderOptions);
-                //loop through the files in the package and decompress then upload them
-                foreach (RarArchiveEntry entry in reader.Entries)
+                    string filePath = $"https://{storageAccountName}.blob.core.windows.net/{reqBlobInfo.containerSource}/{reqBlobInfo.fileName}";
+                    clientSrc = new BlobClient(new Uri(filePath), new DefaultAzureCredential());
+
+                }
+                else
                 {
-                    string validName = entry.Key;
-                    //Replace all NO digits, letters, or "-" by a "-" Azure storage is specific on valid characters
-                    validName = Regex.Replace(validName, @"[^a-zA-Z0-9\-\.\\]", "-").ToLower();
-                    if (!entry.IsDirectory)
+
+                    //using keys
+                    log.LogInformation("using storage keys. You shouldn't use storage key in production");
+                    clientSrc = new BlobClient(storageAccountConnectionString, reqBlobInfo.containerSource, reqBlobInfo.fileName);
+                }
+            }
+            catch (Exception e)
+            {
+                log.LogError(e.Message);
+                throw new ApplicationException("Failed to create BlobClient", e);
+            }
+
+
+
+            try
+            {
+                if (await clientSrc.ExistsAsync())
+                {
+                    //prepare local disk workspace
+                    log.LogInformation("Preparing local workspace");
+                    var localFolder = Path.Combine(Path.GetTempPath().Replace("C:", "D:"), "Compression", context.InvocationId.ToString());
+                    dir = Directory.CreateDirectory(localFolder);
+                    
+                    
+                    string localFilePath = $@"{localFolder}\{clientSrc.Name}";
+                    try
                     {
-                        if (reqBlobInfo.useManagedIdentity)
+                        log.LogInformation("Downloading the blob to the local workspace");   
+                        var response = await clientSrc.DownloadToAsync(localFilePath);
+                        log.LogInformation($"Downloaded blob with status code {response.Status.ToString()}");
+                    }
+                    catch (Exception e)
+                    {
+                        log.LogError("Could NOT download the rar file",e);
+                        throw e;
+                    }
+                    
+                    //start unrar
+                    log.LogInformation("Start decompression");
+                    var rarReaderOptions = new ReaderOptions()
+                    {
+                        ArchiveEncoding = new ArchiveEncoding(Encoding.UTF8, Encoding.UTF8),
+                        LookForHeader = true
+                    };
+
+                    using var reader = RarArchive.Open(localFilePath, rarReaderOptions);
+                    {
+                        //loop through the files in the package and decompress then upload them
+                        foreach (RarArchiveEntry entry in reader.Entries)
                         {
+                            string validName = entry.Key;
+                            //Replace all NO digits, letters, or "-" by a "-" Azure storage is specific on valid characters
+                            validName = Regex.Replace(validName, @"[^a-zA-Z0-9\-\.\\]", "-").ToLower();
+                            if (!entry.IsDirectory) //uncompress files only. ignore directories
+                            {
+                                if (reqBlobInfo.useManagedIdentity)
+                                {
 
-                            string filePath = $"https://{storageAccountName}.blob.core.windows.net/{reqBlobInfo.containerTarget}/{validName}";
-                            clientDest = new BlobClient(new Uri(filePath), new DefaultAzureCredential());
+                                    string filePath = $"https://{storageAccountName}.blob.core.windows.net/{reqBlobInfo.containerTarget}/{validName}";
+                                    clientDest = new BlobClient(new Uri(filePath), new DefaultAzureCredential());
 
-                        }
-                        else
-                        {
-                            //using keys
-                            clientDest = new BlobClient(storageAccountConnectionString, reqBlobInfo.containerTarget, validName);
-                        }
+                                }
+                                else
+                                {
+                                    //using keys
+                                    clientDest = new BlobClient(storageAccountConnectionString, reqBlobInfo.containerTarget, validName);
+                                }
 
-
-                        using (var fileStream = entry.OpenEntryStream())
-                        {
-                            await clientDest.UploadAsync(fileStream, true);
+                                log.LogInformation($"Found file {validName}");
+                                using (var fileStream = entry.OpenEntryStream())
+                                {
+                                    try
+                                    {
+                                        log.LogInformation($"Uploading to destination container {validName}");
+                                        await clientDest.UploadAsync(fileStream, true);
+                                    }
+                                    catch (Exception e)
+                                    {
+                                        log.LogError("Could NOT upload the decompressed file");
+                                        throw e;
+                                    }
+                                   
+                                }
+                            }
                         }
                     }
+                    
                 }
-                //empty local directory
-                dir.Delete(true);
+                else
+                {
+                    log.LogError("Blob does not exist");
+                    return new BadRequestObjectResult("BLOB_NOT_EXIST");
+                }
 
+                try
+                {
+                    //empty local directory
+                    if(!(null==dir))
+                        await clearLocalWorksapce(dir, 10, log);
+                }
+                catch (Exception e)
+                {
+                    log.LogError("Could NOT delete the working directory after decompression");
+                    throw e;
+                }
             }
-            else
+            catch (Exception e)
             {
-                log.LogError("Blob does not exist");
-                return new BadRequestObjectResult("BLOB_NOT_EXIST");
+                log.LogError(e.Message);
+                return new StatusCodeResult(500); 
             }
 
             return new OkResult();
         }
 
+        private static async Task clearLocalWorksapce(DirectoryInfo workspaceFolder,int maxTrials,ILogger log,int count=1)
+        {
+           try
+            {
+                if (workspaceFolder.Exists)
+                {
+                    System.Threading.Thread.Sleep(count * 1000);
+                    log.LogInformation($"Trying to delete workspace, trial: {count}");
+                    workspaceFolder.Delete(true);
+                }
+            }
+            catch(Exception e)
+            {
+                if (maxTrials > count)
+                {
+                    count++;
+                    await clearLocalWorksapce(workspaceFolder, maxTrials,log, count);
+                }
+                else
+                {
+                    if(workspaceFolder.Exists)
+                    {
+                        throw e;
+                    }
 
-       
+                }
+            }
+
+            
+        }
+
     }
 }
