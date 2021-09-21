@@ -3,7 +3,9 @@
 
 @accessToken=
 @domain=http://localhost:7071/api/Unrar
-@domain
+
+
+
 POST {{domain}}
 Content-Type: application/json
 Authorization: Bearer {{accessToken}}
