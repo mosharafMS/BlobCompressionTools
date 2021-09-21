@@ -1,0 +1,18 @@
+﻿
+# To test by REST Client VSCode extension
+
+@accessToken=
+@domain=http://localhost:7071/api/Unrar
+@domain
+POST {{domain}}
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+    "fileName":"MS AGM FY22_TeamsBackgrounds-0823_4.rar",
+    "containerSource":"source",
+    "containerTarget":"destination",
+    "useManagedIdentity":false
+}
+########
+

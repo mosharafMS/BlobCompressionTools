@@ -24,7 +24,7 @@ namespace BlobCompressionTools
     {
         [FunctionName("Unrar")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest req,
             ILogger log, ExecutionContext context)
         {
             log.LogInformation("UnRar function has been called by http trigger");
